@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lista de Links</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 40px 0;
+      display: flex;
+      justify-content: center;
+      background-color: #f4f4f4;
+      transition: background-color 0.5s ease, color 0.5s ease;
+    }
+
+    body.dark-mode {
+      background-color: #2c2c2c; /* Cor escura para o fundo */
+      color: white; /* Cor do texto para branco no modo escuro */
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+      transition: background-color 0.5s ease, color 0.5s ease;
+    }
+
+    .dark-mode .container {
+      background-color: #2c2c2c;
+      color: white;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .input-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    input[type="text"], input[type="date"] {
+      flex: 1 1 45%;
+    }
+
+    button {
+      background-color: #5591c9;
+      color: white;
+      cursor: pointer;
+      border: none;
+      border: 0.5px solid black;
+    }
+
+    button.edit {
+      background-color: #d1db3c;
+    }
+
+    button.remov {
+      background-color: #ec9b86;
+    }
+
+    button.dark {
+      background-color: #a5a2a2;
+    }
+
+    button:hover {
+      transform: scale(1.08);
+      transition: color 0.3s ease;
+    }
+
+    .dark-mode button {
+      color: black;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .filter-container {
+      margin: 15px 0;
+      text-align: center;
+    }
+
+    .list-container {
+      list-style-type: none;
+      padding: 0;
+      margin-top: 10px;
+    }
+
+    li {
+      background-color: #fff;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      border: 0.5px solid rgb(148, 145, 145);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.5s ease, color 0.5s ease;
+    }
+
+    .dark-mode li {
+      background-color: #444;
+      color: white;
+    }
+
+    .item-info {
+      max-width: 60%;
+    }
+
+    .item-info a {
+      color: #4CAF50;
+      text-decoration: none;
+    }
+
+    .dark-mode .item-info a {
+      color: #90ee90;
+    }
+
+    .date {
+      font-size: 14px;
+      color: #777;
+    }
+
+    .dark-mode .date {
+      color: #bbb;
+    }
+
+    #contador {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    /* Estilo para a notificação de sucesso */
+    .success-message {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Painel de Atualizações</h1>
+
+    <div class="input-container">
+      <input type="text" id="nome" placeholder="Nome" />
+      <input type="text" id="link" placeholder="Link" />
+      <input type="date" id="data" />
+      <button id="btnPrincipal" onclick="adicionarItem()">➕ Adicionar</button>
+      <button onclick="gerarPDF()">📃PDF</button>
+      <button onclick="exportarExcel()">📊 Excel</button>
+      <button class="dark" onclick="alternarModoEscuro()">🌙 Modo Escuro</button>
+    </div>
+
+    <div class="filter-container">
+      <input type="text" id="filtro" placeholder="Filtrar por nome..." onkeyup="filtrarLista()" />
+    </div>
+
+    <ul id="lista" class="list-container"></ul>
+    <p id="contador"></p>
+  </div>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- SheetJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+    let itens = JSON.parse(localStorage.getItem('itens')) || [];
+    let editandoIndex = -1;
+    let modoEscuroAtivo = false;
+
+    function salvarLocalStorage() {
+      localStorage.setItem('itens', JSON.stringify(itens));
+    }
+
+    function atualizarLista() {
+      const listaElement = document.getElementById('lista');
+      listaElement.innerHTML = '';
+      const filtro = document.getElementById('filtro').value.toLowerCase();
+
+      itens.forEach((item, index) => {
+        if (!filtro || item.nome.toLowerCase().includes(filtro)) {
+          const li = renderizarItem(item, index);
+          listaElement.appendChild(li);
+        }
+      });
+    }
+
+    function atualizarContador() {
+      const contadorElement = document.getElementById('contador');
+      contadorElement.textContent = `Total de itens: ${itens.length}`;
+    }
+
+    function limparCampos() {
+      document.getElementById('nome').value = '';
+      document.getElementById('link').value = '';
+      document.getElementById('data').value = '';
+    }
+
+    function adicionarItem() {
+      const nome = document.getElementById('nome').value.trim().toUpperCase();
+      const link = document.getElementById('link').value.trim();
+      let data = document.getElementById('data').value;
+
+      if (!nome || !link || !data) {
+        mostrarMensagem('Por favor, preencha todos os campos.');
+        return;
+      }
+
+      // Formatar a data para o formato dd-mm-aaaa
+      data = formatarData(data);
+
+      if (editandoIndex === -1) {
+        itens.push({ nome, link, data });
+      } else {
+        itens[editandoIndex] = { nome, link, data };
+        editandoIndex = -1;
+        document.getElementById('btnPrincipal').textContent = 'Adicionar';
+      }
+
+      salvarLocalStorage();
+      atualizarLista();
+      atualizarContador();
+      limparCampos();
+      mostrarMensagem(`Item: ${nome} salvo com sucesso!`);
+    }
+
+    function formatarData(data) {
+      const [ano, mes, dia] = data.split('-');
+      return `${dia}-${mes}-${ano}`;
+    }
+
+    function renderizarItem(item, index) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info">
+          <a href="${item.link}" target="_blank">${item.nome}</a>
+          <div class="date">Atualizado em: ${item.data}</div>
+        </div>
+        <div>
+          <button class="edit" onclick="editarItem(${index})">✏️ Editar</button>
+          <button class="remov" onclick="removerItem(${index})">🗑️ Remover</button>
+        </div>
+      `;
+      return li;
+    }
+
+    function editarItem(index) {
+      const item = itens[index];
+      document.getElementById('nome').value = item.nome;
+      document.getElementById('link').value = item.link;
+      document.getElementById('data').value = item.data.split('-').reverse().join('-'); // Para preencher o campo de data no formato correto
+      editandoIndex = index;
+      document.getElementById('btnPrincipal').textContent = 'Salvar';
+    }
+
+    function removerItem(index) {
+      if (confirm('Deseja remover este item?')) {
+        itens.splice(index, 1);
+        salvarLocalStorage();
+        atualizarLista();
+        atualizarContador();
+      }
+    }
+
+    function alternarModoEscuro() {
+      modoEscuroAtivo = !modoEscuroAtivo;
+      document.body.classList.toggle('dark-mode', modoEscuroAtivo);
+    }
+
+    function gerarPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('landscape');  // Modo horizontal
+
+      // Formatar data e hora
+      const dataAtual = new Date();
+      const dataFormatada = `${dataAtual.getDate().toString().padStart(2, '0')}-${(dataAtual.getMonth() + 1).toString().padStart(2, '0')}-${dataAtual.getFullYear()} ${dataAtual.getHours().toString().padStart(2, '0')}:${dataAtual.getMinutes().toString().padStart(2, '0')}:${dataAtual.getSeconds().toString().padStart(2, '0')}`;
+
+      // Adicionar a data e hora no cabeçalho
+      doc.text(`Data de Impressão: ${dataFormatada}`, 10, 10);
+
+      // Adicionar o título
+      doc.text("Abaixo: Lista de Atualizações com Links", 10, 20);
+
+      // Adicionar os itens na lista
+      itens.forEach((item, index) => {
+        doc.text(`Item ${index + 1}: ${item.nome} - Link: ${item.link} - Atualizado em: ${item.data}`, 10, 30 + (index * 10));
+      });
+
+      // Salvar o arquivo PDF
+      doc.save(`Atualizacoes ${dataAtual}.pdf`);
+
+      mostrarMensagem('PDF gerado com sucesso!');
+    }
+
+    function exportarExcel() {
+    const ws = XLSX.utils.json_to_sheet(itens);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Atualizações");
+    XLSX.writeFile(wb, "atualizacoes.xlsx");
+
+    mostrarMensagem('Excel exportado com sucesso!');
+  }
+
+    function filtrarLista() {
+      atualizarLista();
+    }
+
+    function mostrarMensagem(mensagem) {
+      const mensagemElement = document.createElement('div');
+      mensagemElement.textContent = mensagem;
+      mensagemElement.classList.add('success-message');
+      document.body.appendChild(mensagemElement);
+
+      setTimeout(() => {
+        mensagemElement.style.opacity = 1;
+      }, 100);
+
+      setTimeout(() => {
+        mensagemElement.style.opacity = 0;
+        setTimeout(() => {
+          document.body.removeChild(mensagemElement);
+        }, 500);
+      }, 2000);
+    }
+
+    // Inicializar a lista e o contador quando a página carregar
+    atualizarLista();
+    atualizarContador();
+  </script>
+</body>
+</html>
